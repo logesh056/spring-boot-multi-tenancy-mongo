@@ -1,53 +1,54 @@
 package com.tutorial.springbootmultitenancymongo.configuration;
 
+import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
-import com.mongodb.MongoCredential;
-import com.mongodb.ServerAddress;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoDatabase;
 import com.tutorial.springbootmultitenancymongo.domain.TenantDatasource;
-import com.tutorial.springbootmultitenancymongo.exception.TenantAliasNotFoundException;
+import com.tutorial.springbootmultitenancymongo.exception.TenantNotFoundException;
 import com.tutorial.springbootmultitenancymongo.filter.TenantContext;
-import com.tutorial.springbootmultitenancymongo.service.RedisDatasourceService;
+import com.tutorial.springbootmultitenancymongo.service.MongoDataSourceService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
-import java.util.Collections;
+import jakarta.annotation.PostConstruct;
+
 import java.util.HashMap;
 import java.util.Map;
 
 @Component
 @Slf4j
-public class MongoDataSources {
-
+public class MongoDataSources
+{
 
     /**
-     * Key: String tenant alias
+     * Key: String tenant id
      * Value: TenantDatasource
      */
     private Map<String, TenantDatasource> tenantClients;
-
     private final ApplicationProperties applicationProperties;
-    private final RedisDatasourceService redisDatasourceService;
+    private final MongoDataSourceService mongoDataSourceService;
+    private MongoClient defaultClient;
+    private final TenantContext tenantContext;
 
-    public MongoDataSources(ApplicationProperties applicationProperties, RedisDatasourceService redisDatasourceService) {
+    public MongoDataSources(ApplicationProperties applicationProperties, MongoDataSourceService mongoDataSourceService, TenantContext tenantContext)
+    {
         this.applicationProperties = applicationProperties;
-        this.redisDatasourceService = redisDatasourceService;
+        this.mongoDataSourceService = mongoDataSourceService;
+        this.tenantContext = tenantContext;
     }
-
 
     /**
      * Initialize all mongo datasource
      */
     @PostConstruct
     @Lazy
-    public void initTenant() {
+    public void initTenant()
+    {
         tenantClients = new HashMap<>();
-        tenantClients = redisDatasourceService.loadServiceDatasources();
     }
 
     /**
@@ -56,7 +57,8 @@ public class MongoDataSources {
      * @return String of default database.
      */
     @Bean
-    public String databaseName() {
+    public String databaseName()
+    {
         return applicationProperties.getDatasourceDefault().getDatabase();
     }
 
@@ -65,13 +67,13 @@ public class MongoDataSources {
      * It is used to be injected into the constructor of MultiTenantMongoDBFactory.
      */
     @Bean
-    public MongoClient getMongoClient() {
-        MongoCredential credential = MongoCredential.createCredential(applicationProperties.getDatasourceDefault().getUsername(), applicationProperties.getDatasourceDefault().getDatabase(), applicationProperties.getDatasourceDefault().getPassword().toCharArray());
-        return MongoClients.create(MongoClientSettings.builder()
-                .applyToClusterSettings(builder ->
-                        builder.hosts(Collections.singletonList(new ServerAddress(applicationProperties.getDatasourceDefault().getHost(), Integer.parseInt(applicationProperties.getDatasourceDefault().getPort())))))
-                .credential(credential)
-                .build());
+    public MongoClient getMongoClient()
+    {
+        defaultClient = MongoClients.create(
+                MongoClientSettings.builder()
+                        .applyConnectionString(new ConnectionString(applicationProperties.getDatasourceDefault().getHost()))
+                        .build());
+        return defaultClient;
     }
 
     /**
@@ -81,15 +83,21 @@ public class MongoDataSources {
      */
     public MongoDatabase mongoDatabaseCurrentTenantResolver() {
         try {
-            final String tenantId = TenantContext.getTenantId();
+            final String tenantId = tenantContext.getTenantId();
 
-            // Compose tenant alias. (tenantAlias = key + tenantId)
-            String tenantAlias = String.format("%s_%s", applicationProperties.getTenantKey(), tenantId);
+            System.out.println("Total Tenants :");
+            tenantClients.forEach((key, value) -> {
+                System.out.println(key);
+            });
 
-            return tenantClients.get(tenantAlias).getClient().
-                    getDatabase(tenantClients.get(tenantAlias).getDatabase());
+            if (!tenantClients.containsKey(tenantId)) {
+                tenantClients.put(tenantId, mongoDataSourceService.createMongoClientForTenant(tenantId, defaultClient));
+            }
+
+            return tenantClients.get(tenantId).getClient().
+                    getDatabase(tenantClients.get(tenantId).getDatabase());
         } catch (NullPointerException exception) {
-            throw new TenantAliasNotFoundException("Tenant Datasource alias not found.");
+            throw new TenantNotFoundException("Tenant Datasource alias not found.");
         }
     }
 }

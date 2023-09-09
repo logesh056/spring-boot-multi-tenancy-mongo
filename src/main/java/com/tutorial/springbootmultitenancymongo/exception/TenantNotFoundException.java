@@ -7,12 +7,12 @@ package com.tutorial.springbootmultitenancymongo.exception;
  *
  * Description: trigger exception when tenant alias not found
  */
-public class TenantAliasNotFoundException extends RuntimeException {
-    public TenantAliasNotFoundException(String msg, Throwable t) {
+public class TenantNotFoundException extends RuntimeException {
+    public TenantNotFoundException(String msg, Throwable t) {
         super(msg, t);
     }
 
-    public TenantAliasNotFoundException(String msg) {
+    public TenantNotFoundException(String msg) {
         super(msg);
     }
 }
