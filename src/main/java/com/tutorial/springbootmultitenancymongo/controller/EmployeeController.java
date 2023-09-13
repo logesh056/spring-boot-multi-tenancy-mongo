@@ -1,7 +1,12 @@
 package com.tutorial.springbootmultitenancymongo.controller;
 
+import com.tutorial.springbootmultitenancymongo.configuration.ApplicationProperties;
 import com.tutorial.springbootmultitenancymongo.domain.Employee;
 import com.tutorial.springbootmultitenancymongo.service.EmployeeService;
+import com.tutorial.springbootmultitenancymongo.service.EncryptionService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -11,10 +16,16 @@ import java.util.Optional;
 @RequestMapping("/employee")
 public class EmployeeController {
 
+    private static final Logger logger = LoggerFactory.getLogger(EmployeeController.class);
     private final EmployeeService employeeService;
+    private final EncryptionService encryptionService;
 
-    public EmployeeController(EmployeeService employeeService) {
+    private final ApplicationProperties applicationProperties;
+
+    public EmployeeController(EmployeeService employeeService, EncryptionService encryptionService, ApplicationProperties applicationProperties) {
         this.employeeService = employeeService;
+        this.encryptionService = encryptionService;
+        this.applicationProperties = applicationProperties;
     }
 
 
@@ -26,6 +37,7 @@ public class EmployeeController {
 
     @PostMapping()
     public Employee save(@RequestBody Employee employee) {
+        logger.info("saving employee is " + employee.getEmail());
         return employeeService.save(employee);
     }
 
@@ -45,13 +57,24 @@ public class EmployeeController {
     }
 
     @GetMapping("/{id}")
-    public Employee getEmployeeById(@PathVariable(value = "id") String id) {
-        return employeeService.getById(id).orElseThrow(() -> new RuntimeException("not found"));
+    public String getEmployeeById(@PathVariable(value = "id") String id) {
+        System.out.println("get method inside");
+        return encryptionService.encrypt("mongodb+srv://logesh:LogeshInnoura@cluster0.9ibzjyp.mongodb.net/b4d34e42-79a6-478e-b3af-12ce7311fa09?retryWrites=true&w=majority",
+                applicationProperties.getEncryption().getSecret(),
+                applicationProperties.getEncryption().getSalt());
     }
     @DeleteMapping("/{id}")
     public void deleteEmployee(@PathVariable(value = "id") String id) {
         employeeService.deleteById(id);
     }
 
+    @GetMapping("/encrypt/{srv}")
+    public String encrypt(@PathVariable(value = "srv") String srv, @Value("${application.encryption.secret}") String secret,  @Value("${application.encryption.salt}") String salt) {
+        System.out.println("inside srv");
+
+        return encryptionService.decrypt("srv=mongodb+srv://logesh:LogeshInnoura@cluster0.9ibzjyp.mongodb.net/b4d34e42-79a6-478e-b3af-12ce7311fa09?retryWrites=true&w=majority",
+                applicationProperties.getEncryption().getSecret(),
+                applicationProperties.getEncryption().getSalt());
+    }
 
 }

@@ -2,6 +2,9 @@
 # Application specific properties
 # Add your own application properties here, see the ApplicationProperties class
 # ===================================================================
+server:
+  port: 8081
+
 application:
   tenant-key: bd
   service-key: multitenancy
@@ -13,3 +16,18 @@ application:
     host: mongodb+srv://logesh:LogeshInnoura@cluster0.9ibzjyp.mongodb.net/default?retryWrites=true&w=majority
     port: 27017
     database: default
+spring:
+  application:
+    name: multitenant
+tracing:
+  url: http://localhost:4318/v1/traces
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+
+logging:
+  pattern:
+    level: '%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]'
+
